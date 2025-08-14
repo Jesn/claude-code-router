@@ -24,9 +24,9 @@ try {
   }
   execSync('cd ui && npm run build', { stdio: 'inherit' });
   
-  // Copy the built UI index.html to dist
+  // Copy the built UI files to dist
   console.log('Copying UI build artifacts...');
-  execSync('shx cp ui/dist/index.html dist/index.html', { stdio: 'inherit' });
+  execSync('shx cp -r ui/dist/* dist/', { stdio: 'inherit' });
   
   console.log('Build completed successfully!');
 } catch (error) {

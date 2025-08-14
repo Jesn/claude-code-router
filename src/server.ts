@@ -4,6 +4,7 @@ import { CONFIG_FILE } from "./constants";
 import { join } from "path";
 import { readFileSync } from "fs";
 import fastifyStatic from "@fastify/static";
+import { requestLogger } from "./utils/requestLogger";
 
 export const createServer = (config: any): Server => {
   const server = new Server(config);
@@ -33,6 +34,41 @@ export const createServer = (config: any): Server => {
       })
     );
     return { transformers: transformerList };
+  });
+
+  // 添加日志API端点
+  server.app.get("/api/logs", async (req, reply) => {
+    // 检查访问权限
+    const accessLevel = (req as any).accessLevel || "restricted";
+    if (accessLevel === "restricted") {
+      reply.status(401).send("API key required to access logs");
+      return;
+    }
+
+    const query = req.query as any;
+    const limit = parseInt(query.limit) || 100;
+    const logs = requestLogger.getRecentLogs(limit);
+
+    return { logs };
+  });
+
+  server.app.get("/api/logs/:id", async (req, reply) => {
+    // 检查访问权限
+    const accessLevel = (req as any).accessLevel || "restricted";
+    if (accessLevel === "restricted") {
+      reply.status(401).send("API key required to access logs");
+      return;
+    }
+
+    const { id } = req.params as any;
+    const log = requestLogger.getLogById(id);
+
+    if (!log) {
+      reply.status(404).send("Log not found");
+      return;
+    }
+
+    return log;
   });
 
   // Add endpoint to save config.json with access control
@@ -88,6 +124,16 @@ export const createServer = (config: any): Server => {
     }, 1000);
   });
 
+  // Redirect /ui to /ui/ for proper static file serving
+  server.app.get("/ui", async (_, reply) => {
+    return reply.redirect("/ui/");
+  });
+
+  // Redirect /ui/logs to main UI with logs route
+  server.app.get("/ui/logs", async (_, reply) => {
+    return reply.redirect("/ui/#/logs");
+  });
+
   // Register static file serving with caching
   server.app.register(fastifyStatic, {
     root: join(__dirname, "..", "dist"),
@@ -95,10 +141,7 @@ export const createServer = (config: any): Server => {
     maxAge: "1h",
   });
 
-  // Redirect /ui to /ui/ for proper static file serving
-  server.app.get("/ui", async (_, reply) => {
-    return reply.redirect("/ui/");
-  });
+
 
   return server;
 };

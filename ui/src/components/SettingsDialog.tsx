@@ -45,6 +45,18 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
             <Switch id="log" checked={config.LOG} onCheckedChange={handleLogChange} />
             <Label htmlFor="log" className="transition-all-ease hover:scale-[1.02] cursor-pointer">{t("toplevel.log")}</Label>
           </div>
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="request-log"
+              checked={config.REQUEST_LOG !== false}
+              onCheckedChange={(checked) => {
+                setConfig({ ...config, REQUEST_LOG: checked });
+              }}
+            />
+            <Label htmlFor="request-log" className="transition-all-ease hover:scale-[1.02] cursor-pointer">
+              记录请求日志
+            </Label>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="claude-path" className="transition-all-ease hover:scale-[1.01] cursor-pointer">{t("toplevel.claude_path")}</Label>
             <Input id="claude-path" value={config.CLAUDE_PATH} onChange={handlePathChange} className="transition-all-ease focus:scale-[1.01]" />

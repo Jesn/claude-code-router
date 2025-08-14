@@ -6,6 +6,8 @@ import { initConfig, initDir, cleanupLogFiles } from "./utils";
 import { createServer } from "./server";
 import { router } from "./utils/router";
 import { apiKeyAuth } from "./middleware/auth";
+import { requestLogger } from "./utils/requestLogger";
+import { httpInterceptor } from "./utils/httpInterceptor";
 import {
   cleanupPidFile,
   isServiceRunning,
@@ -106,8 +108,8 @@ async function run(options: RunOptions = {}) {
     },
   });
   // Add async preHandler hook for authentication
-  server.addHook("preHandler", async (req, reply) => {
-    return new Promise((resolve, reject) => {
+  server.addHook("preHandler", async (req: any, reply: any) => {
+    return new Promise<void>((resolve, reject) => {
       const done = (err?: Error) => {
         if (err) reject(err);
         else resolve();
@@ -116,11 +118,63 @@ async function run(options: RunOptions = {}) {
       apiKeyAuth(config)(req, reply, done).catch(reject);
     });
   });
-  server.addHook("preHandler", async (req, reply) => {
+  // 安装HTTP拦截器以记录请求转换过程
+  httpInterceptor.install();
+
+  server.addHook("preHandler", async (req: any, reply: any) => {
     if (req.url.startsWith("/v1/messages")) {
+      // 记录请求开始时间
+      (req as any).startTime = Date.now();
+
+      // 设置当前请求ID到全局上下文，供HTTP拦截器使用
+      if ((req as any).requestId) {
+        const { httpInterceptor: interceptor } = await import("./utils/httpInterceptor");
+        (interceptor.constructor as any).setCurrentRequestId((req as any).requestId);
+      }
+
       router(req, reply, config);
     }
   });
+
+  // 添加响应日志中间件
+  server.addHook("onSend", async (req: any, reply: any, payload: any) => {
+    if (req.url.startsWith("/v1/messages") && (req as any).requestId) {
+      const requestId = (req as any).requestId;
+      const startTime = (req as any).startTime || Date.now();
+
+      try {
+        // 解析响应体
+        let responseBody = payload;
+        if (typeof payload === 'string') {
+          try {
+            responseBody = JSON.parse(payload);
+          } catch (e) {
+            responseBody = payload;
+          }
+        }
+
+        requestLogger.logResponse(
+          requestId,
+          reply.statusCode,
+          reply.getHeaders(),
+          responseBody,
+          startTime
+        );
+
+        // 清理全局请求ID上下文
+        const { httpInterceptor: interceptor } = await import("./utils/httpInterceptor");
+        (interceptor.constructor as any).clearCurrentRequestId();
+      } catch (error: any) {
+        requestLogger.logError(requestId, error);
+
+        // 即使出错也要清理上下文
+        const { httpInterceptor: interceptor } = await import("./utils/httpInterceptor");
+        (interceptor.constructor as any).clearCurrentRequestId();
+      }
+    }
+    return payload;
+  });
+
   server.start();
 }
 

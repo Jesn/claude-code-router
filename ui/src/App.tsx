@@ -9,7 +9,7 @@ import { JsonEditor } from "@/components/JsonEditor";
 import { Button } from "@/components/ui/button";
 import { useConfig } from "@/components/ConfigProvider";
 import { api } from "@/lib/api";
-import { Settings, Languages, Save, RefreshCw, FileJson } from "lucide-react";
+import { Settings, Languages, Save, RefreshCw, FileJson, Activity } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -26,6 +26,7 @@ function App() {
   const [isJsonEditorOpen, setIsJsonEditorOpen] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
+
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -189,6 +190,15 @@ function App() {
           </Button>
           <Button variant="ghost" size="icon" onClick={() => setIsJsonEditorOpen(true)} className="transition-all-ease hover:scale-110">
             <FileJson className="h-5 w-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/logs')}
+            className="transition-all-ease hover:scale-110"
+            title="查看请求日志"
+          >
+            <Activity className="h-5 w-5" />
           </Button>
           <Popover>
             <PopoverTrigger asChild>

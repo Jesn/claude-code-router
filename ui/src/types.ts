@@ -33,6 +33,7 @@ export interface Config {
   transformers: Transformer[];
   // Top-level settings
   LOG: boolean;
+  REQUEST_LOG?: boolean;
   CLAUDE_PATH: string;
   HOST: string;
   PORT: number;

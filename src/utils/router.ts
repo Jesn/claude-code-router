@@ -5,6 +5,7 @@ import {
 } from "@anthropic-ai/sdk/resources/messages";
 import { get_encoding } from "tiktoken";
 import { log } from "./log";
+import { requestLogger } from "./requestLogger";
 
 const enc = get_encoding("cl100k_base");
 
@@ -125,8 +126,51 @@ const getUseModel = async (req: any, tokenCount: number, config: any) => {
   return config.Router!.default;
 };
 
+// 获取路由原因的辅助函数
+const getRoutingReason = (req: any, tokenCount: number, config: any): string => {
+  const longContextThreshold = config.Router.longContextThreshold || 60000;
+
+  if (tokenCount > longContextThreshold && config.Router.longContext) {
+    return `long_context (${tokenCount} tokens > ${longContextThreshold})`;
+  }
+
+  if (
+    req.body?.system?.length > 1 &&
+    req.body?.system[1]?.text?.startsWith("<CCR-SUBAGENT-MODEL>")
+  ) {
+    return 'subagent_model';
+  }
+
+  if (
+    req.body.model?.startsWith("claude-3-5-haiku") &&
+    config.Router.background
+  ) {
+    return 'background_task';
+  }
+
+  if (req.body.thinking && config.Router.think) {
+    return 'thinking_mode';
+  }
+
+  if (
+    Array.isArray(req.body.tools) &&
+    req.body.tools.some((tool: any) => tool.type?.startsWith("web_search")) &&
+    config.Router.webSearch
+  ) {
+    return 'web_search';
+  }
+
+  return 'default_fallback';
+};
+
 export const router = async (req: any, _res: any, config: any) => {
   const { messages, system = [], tools }: MessageCreateParamsBase = req.body;
+
+  // 生成请求ID并记录请求
+  const requestId = requestLogger.generateRequestId();
+  req.requestId = requestId;
+  requestLogger.logRequest(requestId, req);
+
   try {
     const tokenCount = calculateTokenCount(
       messages as MessageParam[],
@@ -135,22 +179,34 @@ export const router = async (req: any, _res: any, config: any) => {
     );
 
     let model;
+    let routingReason = 'default';
+
     if (config.CUSTOM_ROUTER_PATH) {
       try {
         const customRouter = require(config.CUSTOM_ROUTER_PATH);
         req.tokenCount = tokenCount; // Pass token count to custom router
         model = await customRouter(req, config);
+        if (model) {
+          routingReason = 'custom_router';
+        }
       } catch (e: any) {
         log("failed to load custom router", e.message);
       }
     }
     if (!model) {
       model = await getUseModel(req, tokenCount, config);
+      routingReason = getRoutingReason(req, tokenCount, config);
     }
+
     req.body.model = model;
+
+    // 记录路由决策
+    requestLogger.logRouting(requestId, tokenCount, model, routingReason);
+
   } catch (error: any) {
     log("Error in router middleware:", error.message);
     req.body.model = config.Router!.default;
+    requestLogger.logError(requestId, error);
   }
   return;
 };

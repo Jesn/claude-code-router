@@ -136,6 +136,14 @@ export const writeConfigFile = async (config: any) => {
 export const initConfig = async () => {
   const config = await readConfigFile();
   Object.assign(process.env, config);
+
+  // 设置请求日志环境变量
+  if (config.REQUEST_LOG !== undefined) {
+    process.env.REQUEST_LOG = String(config.REQUEST_LOG);
+  } else {
+    process.env.REQUEST_LOG = "true"; // 默认启用
+  }
+
   return config;
 };
 
